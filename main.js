@@ -1,34 +1,62 @@
-const fs = require('node:fs/promises');
-const path= require('node:path')
+const fs = require('node:fs/promises')
+const path = require('node:path')
 
-const fn = async () => {
+const {read, write} = require('./fs.services')
 
-    const pathToDir = path.join(process.cwd(), 'baseFolder');
-    await fs.mkdir(pathToDir, {recursive: true});
+require('dotenv').config();
 
-    const dirs = ['folder', 'folder2', 'folder3', 'folder4', 'folder5'];
-    const files = ['file.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'file5.txt'];
+const express = require('express');
+const app = express();
 
-    await Promise.all(dirs.map( async (folder) => {
-        const folderPath = path.join(pathToDir, folder);
-        await fs.mkdir(folderPath, {recursive: true});
+app.use(express.json());
+app.use(express.urlencoded({extended: true}));
 
-        await Promise.all(files.map(async (file) => {
-            await fs.writeFile(path.join(folderPath, file), "Hello node")
-        }))
-    }))
+app.get('/users', async (req, res) => {
+    const users = await read();
+    res.json(users)
+})
 
-    const data = await fs.readdir(pathToDir);
-    for (const folder of data) {
-        folderPath = path.join(pathToDir, folder);
-        const files = await fs.readdir(folderPath);
-        const stat = await fs.stat(folderPath);
-        console.log(`File ${folderPath} is file: ${stat.isFile()}`)
-        for (const file of files) {
-            const filePath = path.join(folderPath, file)
-            const stat = await fs.stat(filePath);
-            console.log(`File ${filePath} is file: ${stat.isFile()}`)
-        }
+app.post('/users', async (req, res) => {
+    const users = await read();
+    console.log(req.body)
+    const newUser = {
+        id: users.length ? users.length + 1 : 1,
+        name: req.body.name,
+        email: req.body.email,
+        password: req.body.password
     }
-}
-fn();
+    users.push(newUser)
+    await write(users)
+    res.status(201).json(newUser);
+})
+
+app.get('/users/:userId', async (req, res) => {
+    const users = await read();
+    console.log(users)
+    const user = users.find(user => user.id === Number(req.params.userId));
+    res.json(user)
+})
+
+app.put('/users/:userId', async (req, res) => {
+    const users = await read();
+    const index = users.findIndex(user => user.id === +req.params.userId)
+    console.log(index);
+    console.log(req.body);
+    const user = users[index];
+    user.name = req.body.name;
+    user.email = req.body.email;
+    user.password = req.body.password;
+    res.json(users);
+})
+
+app.delete('/users/:userId', async (req, res) => {
+    const users = await read();
+    const index = users.findIndex(user => {
+        user.id === req.params.userId
+    })
+    users.splice(index, 1);
+    await write(users);
+    res.sendStatus(204)
+})
+const port = process.env.PORT;
+app.listen(port);
